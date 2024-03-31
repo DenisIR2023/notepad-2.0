@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сайт с заметками</title>
+    <!-- Стили для тёмной темы -->
+    <style id="darkTheme">
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #333;
+            color: #ddd;
+        }
+        h1, h2 {
+            color: #ddd;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            resize: none;
+            background-color: #444;
+            color: #ddd;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            background-color: #555;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #666;
+        }
+        #allNotes {
+            background-color: #444;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        p {
+            margin: 5px 0;
+            word-wrap: break-word;
+        }
+        .deleteButton {
+            background-color: #f44336;
+            color: white;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        #noteCount {
+            margin-top: 10px;
+            font-size: 18px;
+        }
+    </style>
+    <!-- Стили для светлой темы -->
+    <style id="lightTheme">
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+            color: #333;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            resize: none;
+            background-color: #fff;
+            color: #333;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #allNotes {
+            background-color: #fff;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        p {
+            margin: 5px 0;
+            word-wrap: break-word;
+        }
+        .deleteButton {
+            background-color: #f44336;
+            color: white;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        #noteCount {
+            margin-top: 10px;
+            font-size: 18px;
+        }
+    </style>
+    <link rel="icon" href="image/notepad.png" type="image/png">
+    <link rel="shortcut icon" href="image/notepad.png" type="image/png">
+</head>
+<body>
+    <button id="themeSwitcher">Сменить тему</button>
+    <h1 id="siteTitle">Сайт с заметками</h1>
+    
+    <h2 id="writeNoteHeader">Написать заметку:</h2>
+    <form id="noteForm">
+        <textarea id="noteInput" rows="4" cols="50"></textarea><br>
+        <button type="submit" id="publishNoteButton">Опубликовать заметку</button>
+    </form>
+
+    <h2 id="allNotesHeader">Все заметки:</h2>
+    <div id="allNotes"></div>
+    <div id="noteCount"></div>
+
+    <!-- Окошко с галочкой -->
+    <div id="enterPublishOption" style="position: fixed; bottom: 10px; right: 10px;">
+        <label for="enterPublishCheckbox">Публикации заметки при нажатии Enter</label>
+        <input type="checkbox" id="enterPublishCheckbox">
+    </div>
+
+    <!-- Добавляем кнопку "Удалить все заметки" -->
+    <button id="deleteAllNotesButton">Удалить все заметки</button>
+
+    <!-- Модальное окно для подтверждения удаления всех заметок -->
+    <div id="confirmDeleteAllModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <p>Вы уверены?</p>
+            <div>
+                <button id="confirmDeleteAllYesButton">Да</button>
+                <button id="confirmDeleteAllNoButton">Нет</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для подтверждения безвозвратного удаления всех заметок -->
+    <div id="confirmDeleteAllPermanentlyModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <p>Все заметки будут удалены безвозвратно! Вы уверены?</p>
+            <div>
+                <button id="confirmDeleteAllPermanentlyYesButton">Да</button>
+                <button id="confirmDeleteAllPermanentlyNoButton">Нет</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let db;
+
+        const request = window.indexedDB.open('notesDB', 1);
+
+        request.onerror = function(event) {
+            console.error('Database error: ' + event.target.errorCode);
+        };
+
+        request.onupgradeneeded = function(event) {
+            db = event.target.result;
+            const objectStore = db.createObjectStore('notes', { keyPath: 'id', autoIncrement: true });
+            objectStore.createIndex('text', 'text', { unique: false });
+        };
+
+        request.onsuccess = function(event) {
+            db = event.target.result;
+            displayAllNotes();
+        };
+
+        const noteForm = document.getElementById('noteForm');
+        const noteInput = document.getElementById('noteInput');
+        const allNotesDiv = document.getElementById('allNotes');
+        const noteCountDiv = document.getElementById('noteCount');
+        const themeSwitcher = document.getElementById('themeSwitcher');
+        const lightThemeStyle = document.getElementById('lightTheme');
+        const darkThemeStyle = document.getElementById('darkTheme');
+        const enterPublishCheckbox = document.getElementById('enterPublishCheckbox');
+        const siteTitle = document.getElementById('siteTitle');
+        const writeNoteHeader = document.getElementById('writeNoteHeader');
+        const allNotesHeader = document.getElementById('allNotesHeader');
+        const publishNoteButton = document.getElementById('publishNoteButton');
+
+        noteForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const noteText = noteInput.value.trim();
+            if (noteText !== '') {
+                addNoteToDB(noteText);
+                displayAllNotes();
+                noteInput.value = '';
+            }
+        });
+
+        themeSwitcher.addEventListener('click', function() {
+            toggleTheme();
+        });
+
+        function toggleTheme() {
+            if (lightThemeStyle.disabled) {
+                lightThemeStyle.disabled = false;
+                darkThemeStyle.disabled = true;
+                themeSwitcher.textContent = 'Тёмная тема';
+            } else {
+                lightThemeStyle.disabled = true;
+                darkThemeStyle.disabled = false;
+                themeSwitcher.textContent = 'Светлая тема';
+            }
+        }
+
+        function displayAllNotes() {
+            const transaction = db.transaction('notes', 'readonly');
+            const objectStore = transaction.objectStore('notes');
+            const request = objectStore.getAll();
+
+            request.onsuccess = function(event) {
+                const notes = event.target.result;
+                allNotesDiv.innerHTML = '';
+                notes.forEach(function(note, index) {
+                    const noteElement = document.createElement('p');
+                    noteElement.textContent = `${index + 1}. ${note.text}`;
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'Удалить';
+                    deleteButton.classList.add('deleteButton');
+                    deleteButton.onclick = function() {
+                        deleteNoteFromDB(note.id);
+                    };
+                    noteElement.appendChild(deleteButton);
+                    allNotesDiv.appendChild(noteElement);
+                });
+                displayNoteCount(notes.length);
+            };
+        }
+
+        function addNoteToDB(text) {
+            const transaction = db.transaction('notes', 'readwrite');
+            const objectStore = transaction.objectStore('notes');
+            const request = objectStore.add({ text: text });
+
+            request.onsuccess = function(event) {
+                console.log('Note added to database');
+            };
+
+            request.onerror = function(event) {
+                console.error('Error adding note to database');
+            };
+        }
+
+        function deleteNoteFromDB(id) {
+            const transaction = db.transaction('notes', 'readwrite');
+            const objectStore = transaction.objectStore('notes');
+            const request = objectStore.delete(id);
+
+            request.onsuccess = function(event) {
+                console.log('Note deleted from database');
+                displayAllNotes();
+            };
+
+            request.onerror = function(event) {
+                console.error('Error deleting note from database');
+            };
+        }
+
+        function displayNoteCount(count) {
+            noteCountDiv.textContent = `Всего заметок: ${count}`;
+        }
+
+        // Обработчик изменения состояния галочки
+        enterPublishCheckbox.addEventListener('change', function() {
+            // Если галочка установлена, включаем функциональность публикации по Enter
+            if (this.checked) {
+                enableEnterPublish();
+            } else {
+                disableEnterPublish();
+            }
+        });
+
+        // Функция включения функциональности публикации по Enter
+        function enableEnterPublish() {
+            // Добавляем обработчик события keydown для поля ввода заметки
+            noteInput.addEventListener('keydown', handleEnterKey);
+        }
+
+        // Функция отключения функциональности публикации по Enter
+        function disableEnterPublish() {
+            // Удаляем обработчик события keydown для поля ввода заметки
+            noteInput.removeEventListener('keydown', handleEnterKey);
+        }
+
+        // Обработчик события нажатия клавиши Enter для поля ввода заметки
+        function handleEnterKey(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault(); // Предотвращаем стандартное поведение Enter в текстовом поле
+                publishNote(); // Вызываем функцию публикации заметки
+            }
+        }
+
+        // Функция публикации заметки
+        function publishNote() {
+            const noteText = noteInput.value.trim();
+            if (noteText !== '') {
+                addNoteToDB(noteText);
+                displayAllNotes();
+                noteInput.value = '';
+            }
+        }
+
+        // Добавляем обработчик клика на кнопку "Удалить все заметки"
+        const deleteAllNotesButton = document.getElementById('deleteAllNotesButton');
+        deleteAllNotesButton.addEventListener('click', function() {
+            // Показываем первое модальное окно для подтверждения удаления всех заметок
+            document.getElementById('confirmDeleteAllModal').style.display = 'block';
+        });
+
+        // Добавляем обработчики клика на кнопки "Да" и "Нет" в первом модальном окне
+        const confirmDeleteAllYesButton = document.getElementById('confirmDeleteAllYesButton');
+        const confirmDeleteAllNoButton = document.getElementById('confirmDeleteAllNoButton');
+        confirmDeleteAllYesButton.addEventListener('click', function() {
+            // Показываем второе модальное окно для подтверждения безвозвратного удаления всех заметок
+            document.getElementById('confirmDeleteAllPermanentlyModal').style.display = 'block';
+            // Скрываем первое модальное окно
+            document.getElementById('confirmDeleteAllModal').style.display = 'none';
+        });
+        confirmDeleteAllNoButton.addEventListener('click', function() {
+            // Скрываем первое модальное окно
+            document.getElementById('confirmDeleteAllModal').style.display = 'none';
+        });
+
+        // Добавляем обработчики клика на кнопки "Да" и "Нет" во втором модальном окне
+        const confirmDeleteAllPermanentlyYesButton = document.getElementById('confirmDeleteAllPermanentlyYesButton');
+        const confirmDeleteAllPermanentlyNoButton = document.getElementById('confirmDeleteAllPermanentlyNoButton');
+        confirmDeleteAllPermanentlyYesButton.addEventListener('click', function() {
+            // Здесь удаляем все заметки из базы данных и обновляем интерфейс
+            const transaction = db.transaction('notes', 'readwrite');
+            const objectStore = transaction.objectStore('notes');
+            const request = objectStore.clear();
+
+            request.onsuccess = function(event) {
+                console.log('All notes deleted from database');
+                // После удаления всех заметок перезагружаем интерфейс
+                displayAllNotes();
+            };
+
+            request.onerror = function(event) {
+                console.error('Error deleting all notes from database');
+            };
+            // Скрываем второе модальное окно
+            document.getElementById('confirmDeleteAllPermanentlyModal').style.display = 'none';
+        });
+        confirmDeleteAllPermanentlyNoButton.addEventListener('click', function() {
+            // Скрываем второе модальное окно
+            document.getElementById('confirmDeleteAllPermanentlyModal').style.display = 'none';
+        });
+
+        // Добавляем обработчики клика на элементы "закрыть" для модальных окон
+        const closeButtons = document.getElementsByClassName('close');
+        for (let i = 0; i < closeButtons.length; i++) {
+            closeButtons[i].addEventListener('click', function() {
+                this.parentElement.parentElement.style.display = 'none';
+            });
+        }
+    </script>
+</body>
+</html>
